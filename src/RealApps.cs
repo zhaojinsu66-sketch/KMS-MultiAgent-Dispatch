@@ -100,6 +100,24 @@ namespace AC
             return old;
         }
 
+        // 把窗口从“子窗口”状态放出来，恢复成一个正常的独立窗口
+        // （用在：应用自己把父窗口换掉了、KMS 决定不再托管它的时候，别把它留在看不见的地方）
+        public static void Detach(IntPtr hwnd, IntPtr oldStyle)
+        {
+            if (hwnd == IntPtr.Zero || !IsWindow(hwnd)) return;
+            try
+            {
+                SetParent(hwnd, IntPtr.Zero);
+                long style = oldStyle.ToInt64();
+                if (style == 0)
+                    style = WS_POPUP | WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
+                SetWindowLongPtr(hwnd, GWL_STYLE, new IntPtr(style));
+                SetWindowPos(hwnd, IntPtr.Zero, 80, 60, 1200, 800, 0x0004 | 0x0020);
+                ShowWindow(hwnd, 5);
+            }
+            catch { }
+        }
+
         public static void Resize(IntPtr hwnd, int width, int height)
         {
             if (hwnd != IntPtr.Zero && IsWindow(hwnd)) MoveWindow(hwnd, 0, 0, Math.Max(width, 200), Math.Max(height, 150), true);
@@ -355,8 +373,11 @@ namespace AC
 
         static bool Matches(AppWindow w, string cmd)
         {
-            bool custom = cmd.IndexOf("--user-data-dir", StringComparison.OrdinalIgnoreCase) >= 0;
-            if (string.IsNullOrEmpty(w.DataDir)) return !custom;
+            if (string.IsNullOrEmpty(w.DataDir))
+            {
+                // 原窗口：就是这台电脑上原本那一份，命令行里不带 KMS 的 real-apps 目录
+                return cmd.IndexOf("real-apps", StringComparison.OrdinalIgnoreCase) < 0;
+            }
             return cmd.IndexOf(w.DataDir, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 

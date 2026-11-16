@@ -738,6 +738,7 @@ namespace AC
         DispatcherTimer _embedTimer;
         AppWindow _embedTarget;
         int _embedTries;
+        int _embedRetries;                       // 应用自己跑回桌面时，自动再放进来几次
         IntPtr _embedSeen = IntPtr.Zero;
 
         Slot SlotFor(AppWindow w)
@@ -927,7 +928,7 @@ namespace AC
                 var err = RealApps.Open(w, false);
                 if (err != null) { F<TextBlock>("AppHostTitle").Text = err; return; }
             }
-            _embedTarget = w; _embedTries = 0; _embedSeen = IntPtr.Zero;
+            _embedTarget = w; _embedTries = 0; _embedSeen = IntPtr.Zero; _embedRetries = 0;
             if (_embedTimer == null)
             {
                 _embedTimer = new DispatcherTimer(); _embedTimer.Interval = TimeSpan.FromMilliseconds(500);
@@ -966,8 +967,13 @@ namespace AC
                 RealApps.Remember(h);
                 // 刚放进来时键盘还在 KMS 这边，过一会儿再交一次给里面的窗口
                 s.Panel.FocusChild();
-                var focusLater = new DispatcherTimer(); focusLater.Interval = TimeSpan.FromMilliseconds(400);
-                focusLater.Tick += (o, a) => { focusLater.Stop(); try { s.Panel.FocusChild(); } catch { } };
+                var focusLater = new DispatcherTimer(); focusLater.Interval = TimeSpan.FromMilliseconds(450);
+                focusLater.Tick += (o, a) =>
+                {
+                    focusLater.Stop();
+                    try { RealApps.Align(h, s.Panel.Handle); } catch { }
+                    try { s.Panel.FocusChild(); } catch { }
+                };
                 focusLater.Start();
             }
             catch (Exception ex) { Store.LogError("嵌入应用窗口", ex); SetHostVisible(false); F<TextBlock>("AppHostTitle").Text = "没能把 " + w.Label + " 放进来。"; }
@@ -1005,14 +1011,25 @@ namespace AC
                 if (!_slots.TryGetValue(w.Id, out s) || s.Hwnd == IntPtr.Zero) continue;
                 if (!IsEmbedded(s))
                 {
-                    // 窗口没了，或者被从这一格里弄出去了：把这一格清掉，重新点它会再放进来
+                    // 窗口没了，或者被应用自己从这一格里弄出去了：
+                    // 还活着的话，先把它恢复成正常的独立窗口，别让它留在一个看不见的面板里
                     bool alive = RealApps.IsWindow(s.Hwnd);
+                    if (alive) RealApps.Detach(s.Hwnd, s.OldStyle);
                     RealApps.Forget(s.Hwnd);
                     s.Hwnd = IntPtr.Zero; s.Panel.Child = IntPtr.Zero; s.Panel.Visible = false;
-                    if (PageApps.DataContext == w && PageApps.Visibility == Visibility.Visible)
+                    // 有些应用（Codex 就是这样）在启动过程中会把窗口重建一次，等于自己跑回桌面。
+                    // 这种情况自动再放进来几次，不用人手点。
+                    bool retry = alive && w == _embedTarget && _embedRetries < 6;
+                    if (retry)
+                    {
+                        _embedRetries++;
+                        _embedSeen = IntPtr.Zero; _embedTries = 0;
+                        if (_embedTimer != null) _embedTimer.Start();
+                    }
+                    if (PageApps.DataContext == w && PageApps.Visibility == Visibility.Visible && !retry)
                     {
                         SetHostVisible(false);
-                        F<TextBlock>("AppHostTitle").Text = alive ? w.Label + " 已经不在这一格里了" : w.Label + (w.IsVm ? " 的画面窗口已关闭" : " 已关闭");
+                        F<TextBlock>("AppHostTitle").Text = alive ? w.Label + " 已经从这一格里出来了（它自己跑回桌面了），点它一下可以再放进来" : w.Label + (w.IsVm ? " 的画面窗口已关闭" : " 已关闭");
                     }
                     continue;
                 }
