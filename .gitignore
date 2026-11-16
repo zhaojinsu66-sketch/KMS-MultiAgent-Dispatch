@@ -1,0 +1,16 @@
+# 构建产物
+AgentCommander.exe
+*.exe
+*.pdb
+
+# 运行时数据：里面是登录凭据、Cookie、会话记录、本机路径，绝对不要提交
+data/
+_backup/
+*.log
+embedded.txt
+
+# 编辑器 / 系统
+.vs/
+*.user
+Thumbs.db
+desktop.ini

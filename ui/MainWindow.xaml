@@ -1,0 +1,425 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="KMS · 多 Agent 调度" Width="1220" Height="820" MinWidth="900" MinHeight="600"
+        WindowStartupLocation="CenterScreen" Background="#FFFFFF"
+        FontFamily="Segoe UI, Microsoft YaHei UI" FontSize="14"
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
+  <Window.Resources>
+    <Style x:Key="Btn" TargetType="Button">
+      <Setter Property="Padding" Value="14,6"/>
+      <Setter Property="Margin" Value="0,0,8,0"/>
+      <Setter Property="Foreground" Value="#1A1A1A"/>
+      <Setter Property="Background" Value="#FFFFFF"/>
+      <Setter Property="BorderBrush" Value="#D9D9D9"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="B" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="B" Property="Opacity" Value="0.8"/></Trigger>
+              <Trigger Property="IsEnabled" Value="False"><Setter TargetName="B" Property="Opacity" Value="0.4"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource Btn}">
+      <Setter Property="Background" Value="#1A1A1A"/>
+      <Setter Property="BorderBrush" Value="#1A1A1A"/>
+      <Setter Property="Foreground" Value="#FFFFFF"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+    <Style x:Key="Danger" TargetType="Button" BasedOn="{StaticResource Btn}">
+      <Setter Property="Foreground" Value="#CF222E"/>
+    </Style>
+    <!-- 输入框里的图标按钮、底部的文字按钮：没有边框，悬停时出现浅色底 -->
+    <Style x:Key="Flat" TargetType="Button">
+      <Setter Property="Foreground" Value="#6F6F6F"/>
+      <Setter Property="FontSize" Value="13.5"/>
+      <Setter Property="Padding" Value="7,3"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Focusable" Value="False"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="B" Background="Transparent" CornerRadius="7" Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="B" Property="Background" Value="#ECECE9"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="Nav" TargetType="RadioButton">
+      <Setter Property="Foreground" Value="#3D3D3D"/>
+      <Setter Property="FontSize" Value="14"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="RadioButton">
+            <Border x:Name="B" Background="Transparent" CornerRadius="8" Margin="10,1" Padding="12,8">
+              <ContentPresenter/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="B" Property="Background" Value="#EFEFEC"/></Trigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="B" Property="Background" Value="#E8E8E4"/>
+                <Setter Property="Foreground" Value="#1A1A1A"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <!-- 左侧菜单里的一个账号：状态圆点、名称、下面一行是登录的账号和模型 -->
+    <Style x:Key="AccountItemBox" TargetType="ListBoxItem">
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ListBoxItem">
+            <Border x:Name="B" Background="Transparent" CornerRadius="8" Margin="10,1" Padding="12,7,8,8">
+              <ContentPresenter/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="B" Property="Background" Value="#EFEFEC"/></Trigger>
+              <Trigger Property="IsSelected" Value="True"><Setter TargetName="B" Property="Background" Value="#E8E8E4"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <DataTemplate x:Key="AccountItem">
+      <DockPanel>
+        <Grid DockPanel.Dock="Left" Width="28" Height="28" Margin="0,2,11,0" VerticalAlignment="Top">
+          <Border CornerRadius="8" Background="{Binding AvatarColor}">
+            <TextBlock Text="{Binding AvatarText}" Foreground="#FFFFFF" FontWeight="SemiBold" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+          <Ellipse Width="10" Height="10" Fill="{Binding DotColor}" Stroke="#F7F7F5" StrokeThickness="1.6"
+                   HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-3,-3"/>
+        </Grid>
+        <StackPanel VerticalAlignment="Center">
+          <TextBlock Text="{Binding Display}" Foreground="#1A1A1A" FontSize="13.5" TextTrimming="CharacterEllipsis"/>
+          <TextBlock Text="{Binding SubText}" Foreground="#8C8C8C" FontSize="11.5" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
+        </StackPanel>
+      </DockPanel>
+    </DataTemplate>
+    <Style x:Key="Card" TargetType="Border">
+      <Setter Property="Background" Value="#FFFFFF"/>
+      <Setter Property="BorderBrush" Value="#E6E6E6"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="12"/>
+      <Setter Property="Padding" Value="18"/>
+    </Style>
+    <Style x:Key="Lbl" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="#3D3D3D"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+      <Setter Property="Margin" Value="0,0,10,0"/>
+    </Style>
+    <Style x:Key="Hint" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="#6F6F6F"/>
+      <Setter Property="TextWrapping" Value="Wrap"/>
+      <Setter Property="LineHeight" Value="21"/>
+    </Style>
+    <Style x:Key="H" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="16"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Foreground" Value="#1A1A1A"/>
+    </Style>
+    <Style TargetType="TextBox">
+      <Setter Property="Padding" Value="6,5"/>
+      <Setter Property="BorderBrush" Value="#D9D9D9"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+    </Style>
+  </Window.Resources>
+
+  <Grid Background="#FFFFFF">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="224"/>
+      <ColumnDefinition Width="*"/>
+    </Grid.ColumnDefinitions>
+
+    <!-- 左侧菜单栏：对话、账号列表、设置 -->
+    <Border Background="#F7F7F5" BorderBrush="#ECECEA" BorderThickness="0,0,1,0">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Margin="0,20,0,0">
+          <TextBlock Text="KMS" Foreground="#1A1A1A" FontSize="20" FontWeight="Bold" Margin="22,0,0,2"/>
+          <TextBlock Text="多 Agent 调度" Foreground="#8C8C8C" FontSize="12" Margin="22,0,0,14"/>
+          <Button x:Name="NewChatBtn" Visibility="Collapsed" Style="{StaticResource Btn}" Content="＋  新对话" Margin="12,0,12,10" HorizontalContentAlignment="Left" Padding="12,7"/>
+          <RadioButton x:Name="NavTask" Style="{StaticResource Nav}" GroupName="nav" IsChecked="True">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="&#xE8BD;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="15" VerticalAlignment="Center" Margin="0,1,10,0"/>
+              <TextBlock Text="账号调度" VerticalAlignment="Center"/>
+            </StackPanel>
+          </RadioButton>
+        </StackPanel>
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,14">
+          <RadioButton x:Name="NavSettings" Style="{StaticResource Nav}" GroupName="nav">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="&#xE713;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="15" VerticalAlignment="Center" Margin="0,1,10,0"/>
+              <TextBlock Text="设置" VerticalAlignment="Center"/>
+            </StackPanel>
+          </RadioButton>
+          <TextBlock x:Name="CliText" Foreground="#8C8C8C" FontSize="12" Margin="22,10,12,0" TextWrapping="Wrap" LineHeight="20"/>
+        </StackPanel>
+        <ScrollViewer Margin="0,14,0,8" VerticalScrollBarVisibility="Auto" Focusable="False">
+        <StackPanel>
+          <!-- 账号调度：每个窗口就是原版 Claude / Codex 应用的一份，各自登录各自的账号 -->
+          <DockPanel Margin="22,0,10,4">
+            <Button x:Name="AddAppBtn" DockPanel.Dock="Right" Style="{StaticResource Flat}" Content="＋ 添加" FontSize="12.5" ToolTip="再开一个真实的 Claude 或 Codex 应用窗口，用另一个账号登录"/>
+          </DockPanel>
+          <ListBox x:Name="AppList" Background="Transparent" BorderThickness="0" Padding="0" IsSynchronizedWithCurrentItem="False"
+                   ItemTemplate="{StaticResource AccountItem}" ItemContainerStyle="{StaticResource AccountItemBox}"
+                   ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled"/>
+          <!-- 命令行账号那一栏已经不用了：入口收起，代码保留（要彻底删除是另一轮的大改） -->
+          <StackPanel Visibility="Collapsed">
+          <DockPanel Margin="22,16,10,4">
+            <Button x:Name="AddAccountBtn" DockPanel.Dock="Right" Style="{StaticResource Flat}" Content="＋ 添加" FontSize="12.5" ToolTip="添加一个 Claude、Codex 或 Gemini 的命令行账号，给总指挥调度用"/>
+            <TextBlock Text="调度账号（命令行）" Foreground="#8C8C8C" FontSize="12" VerticalAlignment="Center"/>
+          </DockPanel>
+          <TextBlock x:Name="NoAccountText" DockPanel.Dock="Top" Text="还没有账号，点上面的“＋ 添加”。" Foreground="#8C8C8C" FontSize="12"
+                     Margin="22,6,14,0" TextWrapping="Wrap" LineHeight="19" Visibility="Collapsed"/>
+          <ListBox x:Name="AccountList" Background="Transparent" BorderThickness="0" Padding="0"
+                   ItemTemplate="{StaticResource AccountItem}" ItemContainerStyle="{StaticResource AccountItemBox}"
+                   ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled"/>
+          </StackPanel>
+        </StackPanel>
+        </ScrollViewer>
+      </DockPanel>
+    </Border>
+
+    <!-- 对话页 -->
+    <Grid x:Name="PageTask" Grid.Column="1" Background="#FFFFFF">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="*"/>
+        <RowDefinition Height="Auto"/>
+      </Grid.RowDefinitions>
+      <ScrollViewer x:Name="ChatScroll" VerticalScrollBarVisibility="Auto" Focusable="False">
+        <StackPanel x:Name="ChatPanel" MaxWidth="768" Margin="40,26,40,18"/>
+      </ScrollViewer>
+      <StackPanel x:Name="EmptyState" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,0,0,40">
+        <TextBlock Text="今天想让团队做什么？" FontSize="28" Foreground="#1A1A1A" HorizontalAlignment="Center"/>
+        <TextBlock x:Name="EmptyHint" Foreground="#8C8C8C" FontSize="14" HorizontalAlignment="Center" Margin="0,12,0,0" TextAlignment="Center" LineHeight="22"/>
+      </StackPanel>
+      <StackPanel Grid.Row="1" MaxWidth="768" Margin="20,0,20,14">
+        <Grid>
+          <Border Background="#FFFFFF" CornerRadius="18">
+            <Border.Effect>
+              <DropShadowEffect BlurRadius="16" ShadowDepth="2" Direction="270" Opacity="0.08" Color="#000000"/>
+            </Border.Effect>
+          </Border>
+          <Border x:Name="InputBorder" Background="#FFFFFF" BorderBrush="#D9D9D9" BorderThickness="1" CornerRadius="18" Padding="8,6,8,6">
+            <DockPanel>
+              <Button x:Name="PlusBtn" DockPanel.Dock="Left" Style="{StaticResource Flat}" Padding="6" VerticalAlignment="Bottom" ToolTip="项目文件夹和 Agent 窗口">
+                <Path Data="M8,2.5 V13.5 M2.5,8 H13.5" Stroke="#1A1A1A" StrokeThickness="1.5" Width="16" Height="16"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+              </Button>
+              <Button x:Name="SendBtn" DockPanel.Dock="Right" Style="{StaticResource Flat}" Padding="0" VerticalAlignment="Bottom"/>
+              <Grid Margin="6,0,8,0">
+                <TextBlock x:Name="InputHint" Foreground="#8C8C8C" FontSize="15" VerticalAlignment="Center" Margin="5,0,0,0"
+                           IsHitTestVisible="False" TextTrimming="CharacterEllipsis"/>
+                <TextBox x:Name="InputBox" Background="Transparent" BorderThickness="0" FontSize="15" Foreground="#1A1A1A"
+                         AcceptsReturn="True" TextWrapping="Wrap" MinHeight="28" MaxHeight="150" Padding="0,3"
+                         VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Center"/>
+              </Grid>
+            </DockPanel>
+          </Border>
+        </Grid>
+        <DockPanel Margin="6,9,6,0" LastChildFill="False">
+          <Button x:Name="FolderBtn" DockPanel.Dock="Left" Style="{StaticResource Flat}"/>
+          <Ellipse x:Name="Ring" DockPanel.Dock="Right" Width="14" Height="14" Stroke="#D0D0D0" StrokeThickness="2" Margin="10,0,2,0" VerticalAlignment="Center"/>
+          <Button x:Name="PermBtn" DockPanel.Dock="Right" Style="{StaticResource Flat}" ToolTip="执行权限"/>
+          <Button x:Name="ChiefBtn" DockPanel.Dock="Right" Style="{StaticResource Flat}" Foreground="#1A1A1A" ToolTip="由哪个账号担任总指挥"/>
+        </DockPanel>
+      </StackPanel>
+    </Grid>
+
+    <!-- 应用多开：点左侧的一个应用窗口后显示。真实窗口是独立的，这一页只负责打开、切换、排列 -->
+    <Grid x:Name="PageApps" Grid.Column="1" Visibility="Collapsed" Background="#FFFFFF">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
+      </Grid.RowDefinitions>
+      <!-- 顶上一条：这个窗口是谁、几个操作 -->
+      <Border x:Name="AppTopBar" Background="#F7F7F5" BorderBrush="#ECECEA" BorderThickness="0,0,0,1" Padding="18,7,12,7">
+        <StackPanel>
+        <DockPanel LastChildFill="False">
+          <TextBox DockPanel.Dock="Left" Width="150" Height="28" Text="{Binding Label, UpdateSourceTrigger=PropertyChanged}" ToolTip="给这个窗口起个名字"/>
+          <TextBlock DockPanel.Dock="Left" Text="{Binding SubText}" Foreground="#6F6F6F" Margin="12,0,0,0" VerticalAlignment="Center"/>
+          <Button x:Name="DeleteAppBtn" DockPanel.Dock="Right" Style="{StaticResource Flat}" Foreground="#CF222E" Content="删除" ToolTip="删除这个窗口，连同它的登录和数据"/>
+          <Button x:Name="TileAppsBtn" DockPanel.Dock="Right" Style="{StaticResource Flat}" Content="全部放回桌面并排" ToolTip="把所有窗口从 KMS 里拿出来，在屏幕上并排排好"/>
+          <Button x:Name="PopAppBtn" DockPanel.Dock="Right" Style="{StaticResource Flat}" Content="放回桌面" ToolTip="把这个窗口从 KMS 里拿出来，变回独立窗口"/>
+          <Button x:Name="OpenAppBtn" DockPanel.Dock="Right" Style="{StaticResource Flat}" Foreground="#1A1A1A" Content="放进这里" ToolTip="打开这个应用窗口，并放进 KMS 里"/>
+          <Button x:Name="LoginWizBtn" DockPanel.Dock="Right" Style="{StaticResource Flat}" Foreground="#D97757" Content="登录 ▾" ToolTip="给这个窗口登录它自己的账号：登录在它专用的真空浏览器里完成"/>
+          <Button x:Name="WebBtn" DockPanel.Dock="Right" Style="{StaticResource Flat}" Foreground="#2E6FB5" Content="登录浏览器" Visibility="Collapsed" ToolTip="在下面这一格里显示这个窗口的登录浏览器；再点一下回到应用"/>
+        </DockPanel>
+        <TextBlock x:Name="AppNotice" Visibility="Collapsed" Foreground="#B5532F" FontSize="12.5" Margin="0,6,0,1" TextWrapping="Wrap"/>
+        </StackPanel>
+      </Border>
+      <!-- 下面这块就是真实应用窗口所在的地方（由代码把窗口放进来） -->
+      <Grid x:Name="AppHostArea" Grid.Row="1" Background="#FFFFFF">
+        <StackPanel x:Name="AppHostHint" VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="520">
+          <TextBlock x:Name="AppHostTitle" Text="正在打开…" FontSize="20" Foreground="#1A1A1A" HorizontalAlignment="Center"/>
+          <TextBlock x:Name="AppHostText" Style="{StaticResource Hint}" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="520" Margin="0,10,0,0"
+                     Text="这里显示的是官方桌面应用本身的窗口，功能一样不少。每个窗口有自己独立的数据文件夹，所以登录的是它自己的账号。"/>
+        </StackPanel>
+      </Grid>
+    </Grid>
+
+    <!-- 在左侧菜单里点一个账号：右边变成这个 Agent 的对话界面（内容由代码放进来） -->
+    <Grid x:Name="PageAgent" Grid.Column="1" Visibility="Collapsed" Background="#FFFFFF"/>
+
+    <!-- 账号设置页：从 Agent 对话界面右上角的“账号设置”进入 -->
+    <Grid x:Name="PageAccounts" Grid.Column="1" Visibility="Collapsed">
+      <ScrollViewer VerticalScrollBarVisibility="Auto" Focusable="False">
+        <StackPanel Margin="34,28,34,24" MaxWidth="800" HorizontalAlignment="Left">
+          <DockPanel>
+            <Ellipse DockPanel.Dock="Left" Width="10" Height="10" Fill="{Binding DotColor}" Margin="0,3,10,0" VerticalAlignment="Center"/>
+            <Button x:Name="BackToChatBtn" DockPanel.Dock="Right" Style="{StaticResource Btn}" Content="返回对话" Margin="14,0,0,0"/>
+            <TextBlock DockPanel.Dock="Right" Text="{Binding StatusText}" Foreground="#6F6F6F" VerticalAlignment="Center" Margin="12,0,0,0"/>
+            <TextBlock Text="{Binding Display}" FontSize="22" FontWeight="SemiBold" Foreground="#1A1A1A" TextTrimming="CharacterEllipsis"/>
+          </DockPanel>
+
+          <Border Style="{StaticResource Card}" Margin="0,18,0,0">
+            <StackPanel>
+              <TextBlock Text="登录" Style="{StaticResource H}"/>
+              <Grid Margin="0,12,0,0">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="92"/>
+                  <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto"/>
+                  <RowDefinition Height="Auto"/>
+                  <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <TextBlock Text="登录的账号" Style="{StaticResource Lbl}" VerticalAlignment="Top"/>
+                <TextBlock Grid.Column="1" Text="{Binding LoginLine}" Foreground="#1A1A1A" TextWrapping="Wrap" FontWeight="SemiBold"/>
+                <TextBlock Grid.Row="1" Text="登录位置" Style="{StaticResource Lbl}" VerticalAlignment="Top" Margin="0,8,10,0"/>
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DirLine}" Foreground="#6F6F6F" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                <TextBlock Grid.Row="2" Text="联网方式" Style="{StaticResource Lbl}" VerticalAlignment="Top" Margin="0,8,10,0"/>
+                <TextBlock x:Name="NetText" Grid.Row="2" Grid.Column="1" Foreground="#6F6F6F" TextWrapping="Wrap" Margin="0,8,0,0"/>
+              </Grid>
+              <WrapPanel Margin="0,14,0,0">
+                <Button x:Name="LoginBtn" Style="{StaticResource Primary}" Content="登录"/>
+                <Button x:Name="RefreshBtn" Style="{StaticResource Btn}" Content="刷新状态"/>
+                <Button x:Name="LogoutBtn" Style="{StaticResource Btn}" Content="退出登录"/>
+              </WrapPanel>
+              <TextBlock Style="{StaticResource Hint}" FontSize="12.5" Margin="0,12,0,0"
+                         Text="登录在官方工具自己的窗口里完成，本程序不保存你的密码和登录令牌。账号名称由官方命令行报告；Codex 的命令行不报告邮箱，所以邮箱是从它本机的登录文件里读出来显示的。"/>
+            </StackPanel>
+          </Border>
+
+          <Border Style="{StaticResource Card}" Margin="0,14,0,0">
+            <StackPanel>
+              <TextBlock Text="名称和模型" Style="{StaticResource H}"/>
+              <Grid Margin="0,12,0,0">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="92"/>
+                  <ColumnDefinition Width="240"/>
+                  <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="40"/><RowDefinition Height="40"/><RowDefinition Height="40"/><RowDefinition Height="40"/>
+                </Grid.RowDefinitions>
+                <TextBlock Text="名称" Style="{StaticResource Lbl}"/>
+                <TextBox x:Name="NameBox" Grid.Column="1" Height="30" Text="{Binding Label, UpdateSourceTrigger=PropertyChanged}"/>
+                <TextBlock Grid.Column="2" Style="{StaticResource Hint}" FontSize="12.5" VerticalAlignment="Center" Margin="12,0,0,0" Text="你自己起的名字，方便区分账号"/>
+                <TextBlock Grid.Row="1" Text="模型" Style="{StaticResource Lbl}"/>
+                <ComboBox x:Name="ModelBox" Grid.Row="1" Grid.Column="1" Height="30" IsEditable="True" VerticalContentAlignment="Center"
+                          TextSearch.TextPath="Id" Text="{Binding Model, UpdateSourceTrigger=PropertyChanged}">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                      <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding Id}" Foreground="#1A1A1A"/>
+                        <TextBlock Text="{Binding Name}" Foreground="#8C8C8C" Margin="12,0,0,0"/>
+                      </StackPanel>
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+                <TextBlock x:Name="ModelHint" Grid.Row="1" Grid.Column="2" Style="{StaticResource Hint}" FontSize="12.5" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                <TextBlock Grid.Row="2" Text="推理强度" Style="{StaticResource Lbl}"/>
+                <ComboBox x:Name="EffortBox" Grid.Row="2" Grid.Column="1" Height="30" VerticalContentAlignment="Center"/>
+                <TextBlock Grid.Row="2" Grid.Column="2" Style="{StaticResource Hint}" FontSize="12.5" VerticalAlignment="Center" Margin="12,0,0,0" Text="越高想得越久、用量越多"/>
+                <TextBlock Grid.Row="3" Text="同时任务数" Style="{StaticResource Lbl}"/>
+                <TextBox x:Name="ParallelBox" Grid.Row="3" Grid.Column="1" Height="30" Width="60" HorizontalAlignment="Left" Text="{Binding MaxParallel, UpdateSourceTrigger=LostFocus}"/>
+                <TextBlock Grid.Row="3" Grid.Column="2" Style="{StaticResource Hint}" FontSize="12.5" VerticalAlignment="Center" Margin="12,0,0,0" Text="这个账号最多同时做几个任务"/>
+              </Grid>
+            </StackPanel>
+          </Border>
+
+          <Border Style="{StaticResource Card}" Margin="0,14,0,0">
+            <StackPanel>
+              <TextBlock Text="真实运行验证" Style="{StaticResource H}"/>
+              <TextBlock Text="{Binding ModelLine}" Style="{StaticResource Hint}" Margin="0,10,0,0"/>
+              <TextBlock Text="{Binding LastTest}" Foreground="#1A1A1A" TextWrapping="Wrap" LineHeight="22" Margin="0,6,0,0"/>
+              <WrapPanel Margin="0,12,0,0">
+                <Button x:Name="TestBtn" Style="{StaticResource Primary}" Content="测试连接"/>
+                <Button x:Name="OpenWinBtn" Style="{StaticResource Btn}" Content="打开它的窗口"/>
+              </WrapPanel>
+            </StackPanel>
+          </Border>
+
+          <WrapPanel Margin="0,16,0,0">
+            <Button x:Name="ToggleBtn" Style="{StaticResource Btn}" Content="启用 / 停用"/>
+            <Button x:Name="DeleteBtn" Style="{StaticResource Danger}" Content="删除这个账号"/>
+          </WrapPanel>
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+
+    <!-- 设置页 -->
+    <Grid x:Name="PageSettings" Grid.Column="1" Margin="22" Visibility="Collapsed">
+      <Border Style="{StaticResource Card}">
+        <StackPanel>
+          <TextBlock Text="设置" Style="{StaticResource H}" Margin="0,0,0,14"/>
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="200"/>
+              <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="38"/><RowDefinition Height="38"/><RowDefinition Height="38"/><RowDefinition Height="Auto"/>
+              <RowDefinition Height="38"/><RowDefinition Height="38"/><RowDefinition Height="38"/><RowDefinition Height="38"/>
+              <RowDefinition Height="38"/><RowDefinition Height="34"/><RowDefinition Height="34"/>
+            </Grid.RowDefinitions>
+            <TextBlock Text="Claude 程序路径" Style="{StaticResource Lbl}"/>
+            <TextBox Grid.Column="1" Height="30" Text="{Binding ClaudePath, UpdateSourceTrigger=PropertyChanged}"/>
+            <TextBlock Grid.Row="1" Text="Codex 程序路径" Style="{StaticResource Lbl}"/>
+            <TextBox Grid.Row="1" Grid.Column="1" Height="30" Text="{Binding CodexPath, UpdateSourceTrigger=PropertyChanged}"/>
+            <TextBlock Grid.Row="2" Text="Gemini 程序路径" Style="{StaticResource Lbl}"/>
+            <TextBox Grid.Row="2" Grid.Column="1" Height="30" Text="{Binding GeminiPath, UpdateSourceTrigger=PropertyChanged}"/>
+            <TextBlock x:Name="DetectText" Grid.Row="3" Grid.Column="1" Style="{StaticResource Hint}" Margin="0,2,0,12"/>
+            <TextBlock Grid.Row="4" Text="最多同时运行的任务数" Style="{StaticResource Lbl}"/>
+            <TextBox Grid.Row="4" Grid.Column="1" Height="30" Width="80" HorizontalAlignment="Left" Text="{Binding MaxParallel}"/>
+            <TextBlock Grid.Row="5" Text="一次最多拆成几个任务" Style="{StaticResource Lbl}"/>
+            <TextBox Grid.Row="5" Grid.Column="1" Height="30" Width="80" HorizontalAlignment="Left" Text="{Binding MaxTasks}"/>
+            <TextBlock Grid.Row="6" Text="每个任务最多尝试次数" Style="{StaticResource Lbl}"/>
+            <TextBox Grid.Row="6" Grid.Column="1" Height="30" Width="80" HorizontalAlignment="Left" Text="{Binding MaxAttempts}"/>
+            <TextBlock Grid.Row="7" Text="账号触发限额后暂停（分钟）" Style="{StaticResource Lbl}"/>
+            <TextBox Grid.Row="7" Grid.Column="1" Height="30" Width="80" HorizontalAlignment="Left" Text="{Binding CooldownMinutes}"/>
+            <TextBlock Grid.Row="8" Text="单个任务超时（分钟）" Style="{StaticResource Lbl}"/>
+            <TextBox Grid.Row="8" Grid.Column="1" Height="30" Width="80" HorizontalAlignment="Left" Text="{Binding TimeoutMinutes}"/>
+            <TextBlock Grid.Row="9" Text="验收" Style="{StaticResource Lbl}"/>
+            <CheckBox Grid.Row="9" Grid.Column="1" VerticalAlignment="Center" Content="全部任务结束后由总指挥验收并写报告" IsChecked="{Binding FinalReview}"/>
+            <TextBlock Grid.Row="10" Text="Agent 窗口" Style="{StaticResource Lbl}"/>
+            <CheckBox Grid.Row="10" Grid.Column="1" VerticalAlignment="Center" Content="账号开始干活时自动打开它的窗口" IsChecked="{Binding AutoOpenWindows}"/>
+          </Grid>
+          <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+            <Button x:Name="SaveBtn" Style="{StaticResource Primary}" Content="保存设置"/>
+            <TextBlock x:Name="SaveText" Foreground="#2DA44E" VerticalAlignment="Center" Margin="6,0,0,0"/>
+          </StackPanel>
+          <TextBlock Style="{StaticResource Hint}" Margin="0,18,0,0"
+                     Text="程序路径留空时自动查找：先找系统 PATH 里安装的命令行工具，找不到再用 Claude 桌面版、Codex 桌面版自带的同一个命令行程序。Gemini 需要先安装 Gemini CLI。"/>
+        </StackPanel>
+      </Border>
+    </Grid>
+  </Grid>
+</Window>
