@@ -847,7 +847,7 @@ namespace AC
                 Win.Dispatcher.BeginInvoke(new Action(() =>
                 {
                     if (err != null) { ShowAppNotice(w, err); return; }
-                    ShowAppNotice(w, "浏览器已经打开（独立窗口，是“" + w.Label + "”专用的访客模式）。在里面登录；登录完会自动关掉它并切回应用。");
+                    ShowAppNotice(w, "浏览器已经打开（独立窗口，会记住“" + w.Label + "”自己的登录状态）。关掉以后随时可以再从「登录 ▾」里打开同一个。");
                 }));
             });
         }

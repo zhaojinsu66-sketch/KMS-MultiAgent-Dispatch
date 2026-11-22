@@ -209,27 +209,72 @@ namespace AC
         // 在这个窗口的专用真空浏览器里打开一个网址（url 为空就只是打开浏览器）。返回 null 表示成功。
         public static string OpenBrowser(AppWindow w, string url) { return OpenBrowser(w, url, true, true); }
 
-        // raise：把浏览器窗口提到最前面（要放进 KMS 那一格时不用）；newWindow：另开一个窗口（已经有窗口时传 false，网址就开在它里面）
+        // 这个窗口的专用浏览器现在开着吗（按它自己的数据目录认）
+        public static Process FindBrowser(AppWindow w)
+        {
+            try
+            {
+                var dir = BrowserDir(w);
+                var exe = BrowserExe();
+                if (exe == null) return null;
+                var name = Path.GetFileName(exe);
+                using (var s = new ManagementObjectSearcher("SELECT ProcessId, CommandLine FROM Win32_Process WHERE Name='" + name.Replace("'", "''") + "'"))
+                {
+                    foreach (ManagementObject o in s.Get())
+                    {
+                        var cmd = Convert.ToString(o["CommandLine"] ?? "");
+                        if (cmd.IndexOf(dir, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                        if (cmd.IndexOf("--type=", StringComparison.Ordinal) >= 0) continue;
+                        try { return Process.GetProcessById(Convert.ToInt32(o["ProcessId"])); } catch { }
+                    }
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        // raise：把浏览器窗口提到最前面；newWindow：另开一个窗口（已经有窗口时网址就递进去）
         public static string OpenBrowser(AppWindow w, string url, bool raise, bool newWindow)
         {
             var exe = BrowserExe();
             if (exe == null) return "电脑上没有找到 Edge 或 Chrome，没法打开真空浏览器。";
             var dir = BrowserDir(w);
+            var running = FindBrowser(w);
+            bool already = running != null;
             try
             {
                 Directory.CreateDirectory(dir);
-                var psi = new ProcessStartInfo(exe);
-                psi.UseShellExecute = false;
-                // 访客模式：不带任何账号、收藏、插件，关掉后不留登录痕迹
-                psi.Arguments = "--user-data-dir=\"" + dir + "\" --guest --no-first-run --no-default-browser-check --disable-sync" + (newWindow ? " --new-window" : "")
-                              + (string.IsNullOrEmpty(url) ? "" : " \"" + url.Replace("\"", "%22") + "\"");
-                RealApps.CleanEnv(psi);
-                Process.Start(psi);
+                string args;
+                if (!already)
+                {
+                    // 独立的数据目录：跟你平时用的浏览器完全分开；但会记住这个窗口自己的登录，
+                    // 关掉再打开还是原来那个浏览器（所以别再用 --guest，那会一次性丢掉所有状态）
+                    args = "--user-data-dir=\"" + dir + "\" --no-first-run --no-default-browser-check --disable-sync"
+                         + (newWindow ? " --new-window" : "")
+                         + (string.IsNullOrEmpty(url) ? "" : " \"" + url.Replace("\"", "%22") + "\"");
+                }
+                else
+                {
+                    // 已经开着：只把网址递进去；没有网址就相当于切到前面
+                    args = "--user-data-dir=\"" + dir + "\"" + (string.IsNullOrEmpty(url) ? "" : " \"" + url.Replace("\"", "%22") + "\"");
+                }
+                if (!already || !string.IsNullOrEmpty(url))
+                {
+                    var psi = new ProcessStartInfo(exe);
+                    psi.UseShellExecute = false;
+                    psi.Arguments = args;
+                    RealApps.CleanEnv(psi);
+                    Process.Start(psi);
+                }
+                if (raise && already)
+                {
+                    try { running.Refresh(); if (running.MainWindowHandle != IntPtr.Zero) RealApps.Raise(running.MainWindowHandle); } catch { }
+                }
                 // 这个浏览器如果本来就开着，新进程只是把网址递过去就退出；所以按数据文件夹去找真正的主进程来盯
                 int root = 0;
                 for (int i = 0; i < 24 && root == 0; i++) { Thread.Sleep(250); root = EnsureBrowserWatch(w); }
                 if (root == 0) Log("没找到 " + w.Label + " 的专用浏览器进程");
-                else if (raise)
+                else if (raise && !already)
                 {
                     // 尽量让它显示在最前面
                     for (int i = 0; i < 12; i++)
