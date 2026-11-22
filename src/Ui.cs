@@ -22,9 +22,43 @@ namespace AC
 {
     public static class Program
     {
+        // 有些代理软件会同时设置 NO_PROXY 和 no_proxy（只差大小写）。
+        // Windows 不介意，但 .NET 的 ProcessStartInfo 环境字典是大小写不敏感的，
+        // 一碰 psi.Environment 就抛“已添加项”，于是开应用、跑命令行全部失败。
+        // 启动时先把重复的那份删掉，只留全大写的那一个。
+        static void SanitizeEnv()
+        {
+            try
+            {
+                var groups = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+                foreach (System.Collections.DictionaryEntry e in Environment.GetEnvironmentVariables())
+                {
+                    var k = e.Key as string;
+                    if (string.IsNullOrEmpty(k)) continue;
+                    List<string> list;
+                    if (!groups.TryGetValue(k, out list)) { list = new List<string>(); groups[k] = list; }
+                    list.Add(k);
+                }
+                foreach (var g in groups.Values)
+                {
+                    if (g.Count < 2) continue;
+                    string keep = null;
+                    foreach (var k in g) if (k == k.ToUpperInvariant()) { keep = k; break; }
+                    if (keep == null) keep = g[0];
+                    foreach (var k in g)
+                    {
+                        if (k == keep) continue;
+                        try { Environment.SetEnvironmentVariable(k, null); } catch { }
+                    }
+                }
+            }
+            catch { }
+        }
+
         [STAThread]
         public static int Main(string[] args)
         {
+            SanitizeEnv();
             string mode = args.Length > 0 ? args[0] : "";
             var app = new Application();
             app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -806,26 +840,14 @@ namespace AC
         void OpenBrowserHere(AppWindow w, string url)
         {
             if (AppList.SelectedItem != w) AppList.SelectedItem = w; else ShowApp(w);
-            var s = SlotFor(w);
-            bool already = IsWebEmbedded(s);
             Task.Run(() =>
             {
                 Containers.Arm(w);
-                var err = Containers.OpenBrowser(w, url, false, !already);
-                IntPtr h = IntPtr.Zero;
-                if (err == null && !already)
-                    for (int i = 0; i < 80 && h == IntPtr.Zero; i++) { Thread.Sleep(250); h = Containers.BrowserWindow(w); }
+                var err = Containers.OpenBrowser(w, url, true, true);   // 独立窗口打开，能正常打字
                 Win.Dispatcher.BeginInvoke(new Action(() =>
                 {
                     if (err != null) { ShowAppNotice(w, err); return; }
-                    if (!IsWebEmbedded(s))
-                    {
-                        if (h == IntPtr.Zero) { ShowAppNotice(w, "浏览器已经打开，但没能放进这一格，请在任务栏里找它。"); return; }
-                        EmbedWeb(w, s, h);
-                    }
-                    s.ShowWeb = true;
-                    if (PageApps.DataContext == w) { SetHostVisible(true); Arrange(s); }
-                    ShowAppNotice(w, "浏览器就在下面这一格里，是“" + w.Label + "”专用的（访客模式，没有别的账号）。登录完会自动切回应用；想先看应用就点顶部“返回应用”。");
+                    ShowAppNotice(w, "浏览器已经打开（独立窗口，是“" + w.Label + "”专用的访客模式）。在里面登录；登录完会自动关掉它并切回应用。");
                 }));
             });
         }
@@ -897,6 +919,17 @@ namespace AC
             var topBar = Win.FindName("AppTopBar") as FrameworkElement;
             if (topBar != null) topBar.Visibility = Visibility.Visible;
             var s = SlotFor(w);
+            // 应用窗口一律不嵌进来：直接开成桌面上的正常窗口。
+            // 嵌进来（SetParent）会让键盘输入、登录对话框、内置浏览器各种失灵，得不偿失。
+            if (!w.IsVm)
+            {
+                SetHostVisible(false);
+                var openErr = RealApps.Open(w, true);
+                if (openErr != null) { F<TextBlock>("AppHostTitle").Text = openErr; return; }
+                F<TextBlock>("AppHostTitle").Text = w.Label + " 已经打开";
+                F<TextBlock>("AppHostText").Text = "它是桌面上的一个独立窗口（不嵌进来：这样打字、对话框、登录浏览器都跟平时一模一样）。\n登录、换账号用顶部「登录 ▾」，窗口不在最前面时点它一下就会切过去。";
+                return;
+            }
             Arrange(s);
             F<TextBlock>("AppHostText").Text = w.IsVm ? VmHostNote : AppHostNote;
             if (IsEmbedded(s)) { SetHostVisible(true); s.Panel.FocusChild(); return; }

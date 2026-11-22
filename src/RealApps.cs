@@ -474,7 +474,7 @@ namespace AC
                 Process.Start(psi);
                 return null;
             }
-            catch (Exception ex) { return "打开 " + w.KindName + " 失败：" + ex.Message; }
+            catch (Exception ex) { Store.LogError("打开应用 " + w.Kind, ex); return "打开 " + w.KindName + " 失败：" + ex.Message; }
         }
 
         // 如果 KMS 自己是从某个 Claude 会话里启动的，别把那个会话的环境变量带给新开的程序

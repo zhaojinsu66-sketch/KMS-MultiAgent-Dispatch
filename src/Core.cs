@@ -755,9 +755,27 @@ namespace AC
 
         public static void Init(string overrideDir)
         {
-            DataDir = string.IsNullOrEmpty(overrideDir)
-                ? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data")
-                : overrideDir;
+            if (!string.IsNullOrEmpty(overrideDir))
+            {
+                DataDir = overrideDir;
+            }
+            else
+            {
+                var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                // 1) exe 旁边放一个 datadir.txt（安装时写进去）：用它指定的目录，安装版和绿色版就能共用同一份登录数据
+                string custom = null;
+                try
+                {
+                    var pointer = Path.Combine(baseDir, "datadir.txt");
+                    if (File.Exists(pointer)) custom = File.ReadAllText(pointer).Trim().Trim('"');
+                }
+                catch { }
+                if (!string.IsNullOrEmpty(custom) && Directory.Exists(custom)) DataDir = custom;
+                // 2) exe 旁边已经有 data：绿色版用法，数据跟着程序走
+                else if (Directory.Exists(Path.Combine(baseDir, "data"))) DataDir = Path.Combine(baseDir, "data");
+                // 3) 都没有：放到用户目录下，换安装位置/升级都不会丢登录
+                else DataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KMS", "data");
+            }
             Directory.CreateDirectory(DataDir);
             Directory.CreateDirectory(Path.Combine(DataDir, "profiles"));
             Directory.CreateDirectory(Path.Combine(DataDir, "runs"));
