@@ -98,7 +98,7 @@ namespace AC
                 return "没能把新登录的数据搬过去：" + ex.Message + "\n原来的数据还在 " + parked + "，没有丢。关掉所有 Claude 后再点一次“登录向导”可以继续。";
             }
             try { Directory.Move(parked, def); }
-            catch (Exception ex) { return "新窗口已经就绪，但原来的数据没能改回原名：" + ex.Message + "\n它还在 " + parked + "。关掉所有 Claude 后再打开 KMS，会自动恢复。"; }
+            catch (Exception ex) { return "新窗口已经就绪，但原来的数据没能改回原名：" + ex.Message + "\n它还在 " + parked + "。关掉所有 Claude 后再打开 KMS多控，会自动恢复。"; }
             return null;
         }
 

@@ -16,7 +16,7 @@ namespace AC
     {
         public const string ProgId = "KmsLinkURL";
         const string ClientKey = @"Software\Clients\StartMenuInternet\KmsLink";
-        const string DisplayName = "KMS 链接转接器";
+        const string DisplayName = "KMS多控链接转接器";
 
         // 有窗口要打开网页时调用（在后台线程上）：窗口编号、网址
         public static Action<string, string> Opened;
@@ -69,7 +69,7 @@ namespace AC
         // 选不选它当默认浏览器由用户在 Windows 设置里决定。返回 null 表示成功，否则是说明。
         public static string Register()
         {
-            if (!Installed) return "没有找到 KmsLink.exe（应该和 KMS 在同一个文件夹里）。请重新编译一次。";
+            if (!Installed) return "没有找到 KmsLink.exe（应该和 KMS多控在同一个文件夹里）。请重新编译一次。";
             try
             {
                 var browser = CurrentBrowserCommand();
@@ -87,7 +87,7 @@ namespace AC
                     k.SetValue(null, DisplayName); k.SetValue("URL Protocol", "");
                     using (var c = k.CreateSubKey(@"shell\open\command")) c.SetValue(null, open);
                     using (var i = k.CreateSubKey("DefaultIcon")) i.SetValue(null, icon);
-                    using (var a = k.CreateSubKey("Application")) { a.SetValue("ApplicationName", DisplayName); a.SetValue("ApplicationDescription", "把 KMS 多开窗口要打开的网页留在那个窗口里，其它网页照常交给你原来的浏览器。"); a.SetValue("ApplicationIcon", icon); }
+                    using (var a = k.CreateSubKey("Application")) { a.SetValue("ApplicationName", DisplayName); a.SetValue("ApplicationDescription", "把 KMS多控多开窗口要打开的网页留在那个窗口里，其它网页照常交给你原来的浏览器。"); a.SetValue("ApplicationIcon", icon); }
                 }
                 using (var k = Registry.CurrentUser.CreateSubKey(ClientKey))
                 {
@@ -97,7 +97,7 @@ namespace AC
                     using (var cap = k.CreateSubKey("Capabilities"))
                     {
                         cap.SetValue("ApplicationName", DisplayName);
-                        cap.SetValue("ApplicationDescription", "把 KMS 多开窗口要打开的网页留在那个窗口里，其它网页照常交给你原来的浏览器。");
+                        cap.SetValue("ApplicationDescription", "把 KMS多控多开窗口要打开的网页留在那个窗口里，其它网页照常交给你原来的浏览器。");
                         cap.SetValue("ApplicationIcon", icon);
                         using (var u = cap.CreateSubKey("URLAssociations")) { u.SetValue("http", ProgId); u.SetValue("https", ProgId); }
                         using (var f = cap.CreateSubKey("FileAssociations")) { f.SetValue(".htm", ProgId); f.SetValue(".html", ProgId); }

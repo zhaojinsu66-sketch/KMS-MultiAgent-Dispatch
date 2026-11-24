@@ -381,7 +381,7 @@ namespace AC
 
             var sep = new Border(); sep.Height = 1; sep.Background = Look.Line; sep.Margin = new Thickness(0, 14, 0, 0);
             sp.Children.Add(sep);
-            var t1 = Look.Text("经由 KMS 的运行（本次打开以来）", Look.Grey, 12.5); t1.Margin = new Thickness(0, 12, 0, 0);
+            var t1 = Look.Text("经由 KMS多控的运行（本次打开以来）", Look.Grey, 12.5); t1.Margin = new Thickness(0, 12, 0, 0);
             sp.Children.Add(t1);
             var t2 = Look.Text(acc.RunCount == 0 ? "还没有运行过" : "运行 " + acc.RunCount + " 次　输入 " + acc.TotalIn.ToString("N0") + "　输出 " + acc.TotalOut.ToString("N0") + " tokens", Look.Ink, 13.5);
             t2.Margin = new Thickness(0, 5, 0, 0); t2.TextWrapping = TextWrapping.Wrap;

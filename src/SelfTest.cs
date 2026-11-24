@@ -7,8 +7,8 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-[assembly: AssemblyTitle("KMS · 多 Agent 调度")]
-[assembly: AssemblyProduct("Agent Commander")]
+[assembly: AssemblyTitle("KMS多控")]
+[assembly: AssemblyProduct("KMS多控")]
 [assembly: AssemblyVersion("1.0.0.0")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8", FrameworkDisplayName = ".NET Framework 4.8")]
 

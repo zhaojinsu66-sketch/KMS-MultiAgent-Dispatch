@@ -455,8 +455,8 @@ namespace AC
             {
                 var owner = Window.GetWindow(Root);
                 var ask = "当前权限是“完全自动”：它可以不经确认就执行命令、修改文件。确定继续吗？";
-                var answer = owner != null ? MessageBox.Show(owner, ask, "KMS", MessageBoxButton.YesNo, MessageBoxImage.Warning)
-                                           : MessageBox.Show(ask, "KMS", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                var answer = owner != null ? MessageBox.Show(owner, ask, "KMS多控", MessageBoxButton.YesNo, MessageBoxImage.Warning)
+                                           : MessageBox.Show(ask, "KMS多控", MessageBoxButton.YesNo, MessageBoxImage.Warning);
                 if (answer != MessageBoxResult.Yes) return;
                 _fullConfirmed = true;
             }

@@ -379,7 +379,7 @@ namespace AC
             get
             {
                 if (IsVm) return "VirtualBox 虚拟机 " + VmName;
-                return string.IsNullOrEmpty(DataDir) ? "应用原本的那一份（你平时用的窗口，不是 KMS 创建的）" : DataDir;
+                return string.IsNullOrEmpty(DataDir) ? "应用原本的那一份（你平时用的窗口，不是 KMS多控创建的）" : DataDir;
             }
         }
     }

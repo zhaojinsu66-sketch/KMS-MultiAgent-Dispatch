@@ -209,6 +209,87 @@ namespace AC
         // 在这个窗口的专用真空浏览器里打开一个网址（url 为空就只是打开浏览器）。返回 null 表示成功。
         public static string OpenBrowser(AppWindow w, string url) { return OpenBrowser(w, url, true, true); }
 
+        // ---------- 外部浏览器兜底 ----------
+        // 有些应用是通过系统 shell 打开浏览器的（不在作业对象里，ProcWatch 抓不到），
+        // 结果就是本机默认浏览器带着别的账号打开了登录页。这里在“等登录”的这段时间里
+        // 机器级地盯一下新出现的浏览器：只要是登录相关的网址，就改成用这个窗口的专用浏览器打开。
+        static AppWindow _strayFor;
+        static DateTime _strayUntil = DateTime.MinValue;
+        static System.Threading.Timer _strayTimer;
+        static readonly HashSet<int> _strayKnown = new HashSet<int>();
+
+        public static void ArmStrayWatch(AppWindow w, int seconds)
+        {
+            try
+            {
+                _strayFor = w;
+                _strayUntil = DateTime.Now.AddSeconds(seconds);
+                lock (_strayKnown)
+                {
+                    _strayKnown.Clear();
+                    foreach (var pid in BrowserPids()) _strayKnown.Add(pid);
+                }
+                if (_strayTimer == null)
+                    _strayTimer = new System.Threading.Timer(_ => CheckStray(), null, 900, 900);
+                Log("开始留意外部浏览器（" + w.Label + "，15 分钟）");
+            }
+            catch (Exception ex) { Store.LogError("开启外部浏览器兜底", ex); }
+        }
+
+        static List<int> BrowserPids()
+        {
+            var list = new List<int>();
+            try
+            {
+                using (var s = new ManagementObjectSearcher("SELECT ProcessId, Name, CommandLine FROM Win32_Process WHERE Name='msedge.exe' OR Name='chrome.exe' OR Name='firefox.exe'"))
+                    foreach (ManagementObject o in s.Get())
+                        try { list.Add(Convert.ToInt32(o["ProcessId"])); } catch { }
+            }
+            catch { }
+            return list;
+        }
+
+        static void CheckStray()
+        {
+            var w = _strayFor;
+            if (w == null || DateTime.Now > _strayUntil) return;
+            try
+            {
+                var mine = BrowserDir(w);
+                var fresh = new List<int>();
+                lock (_strayKnown)
+                {
+                    foreach (var pid in BrowserPids())
+                    {
+                        if (_strayKnown.Contains(pid)) continue;
+                        _strayKnown.Add(pid);
+                        fresh.Add(pid);
+                    }
+                }
+                foreach (var pid in fresh)
+                {
+                    var image = ProcWatch.ImagePath(pid);
+                    var cmd = ProcWatch.CommandLine(pid);
+                    if (string.IsNullOrEmpty(cmd)) continue;
+                    if (cmd.IndexOf(mine, StringComparison.OrdinalIgnoreCase) >= 0) continue;   // 我们自己开的
+                    var url = UrlToOpen(image ?? "", cmd);
+                    if (url == null) continue;
+                    if (!LooksLikeLogin(url)) continue;
+                    Log("外部浏览器要打开 " + Short(url) + " → 改到 " + w.Label + " 的专用浏览器");
+                    OpenBrowser(w, url, true, false);
+                    try { var p = Process.GetProcessById(pid); if (p.MainWindowHandle != IntPtr.Zero) p.CloseMainWindow(); } catch { }
+                }
+            }
+            catch (Exception ex) { Store.LogError("检查外部浏览器", ex); }
+        }
+
+        static bool LooksLikeLogin(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return false;
+            var u = url.ToLowerInvariant();
+            return u.Contains("claude.ai") || u.Contains("claude.com") || u.Contains("accounts.google.com") || u.Contains("anthropic.com");
+        }
+
         // 这个窗口的专用浏览器现在开着吗（按它自己的数据目录认）
         public static Process FindBrowser(AppWindow w)
         {
@@ -415,7 +496,7 @@ namespace AC
         public static string Deliver(AppWindow w, string link)
         {
             if (w == null || w.Kind != "claude") return "只有 Claude 窗口需要这样交链接。";
-            if (string.IsNullOrEmpty(w.DataDir)) return "这是原窗口，链接本来就会交给它，不需要 KMS 转交。";
+            if (string.IsNullOrEmpty(w.DataDir)) return "这是原窗口，链接本来就会交给它，不需要 KMS多控转交。";
             link = NormalizeLink(link);
             if (link == null) return "这不是 Claude 的登录链接。";
             if (RealApps.Find(w) == null) return "“" + w.Label + "”没有开着，请先打开它。";

@@ -67,6 +67,7 @@ namespace AC
         [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
         [DllImport("user32.dll")] static extern bool IsIconic(IntPtr h);
         [DllImport("user32.dll")] static extern bool IsZoomed(IntPtr h);
+        [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
         [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
 
         [DllImport("user32.dll")] static extern IntPtr SetParent(IntPtr child, IntPtr parent);
@@ -83,8 +84,39 @@ namespace AC
         const long WS_POPUP = 0x80000000L, WS_CHILD = 0x40000000L, WS_CAPTION = 0x00C00000L, WS_THICKFRAME = 0x00040000L,
                    WS_SYSMENU = 0x00080000L, WS_MINIMIZEBOX = 0x00020000L, WS_MAXIMIZEBOX = 0x00010000L;
 
+        // 贴靠：窗口保持独立（样式完全不动，所以打字、对话框、标题栏都跟平时一样），
+        // 只把它摆到 KMS 那一格的屏幕位置上，并认 KMS 做“主人”（总在 KMS 上面、跟着最小化）。
+        public static void Float(IntPtr hwnd, IntPtr owner, int x, int y, int width, int height)
+        {
+            if (hwnd == IntPtr.Zero || !IsWindow(hwnd)) return;
+            try
+            {
+                if (IsIconic(hwnd)) ShowWindow(hwnd, 9);   // 先还原，否则摆好了也看不见
+                SetWindowLongPtr(hwnd, -8, owner);         // GWL_HWNDPARENT = 主人窗口
+                SetWindowPos(hwnd, IntPtr.Zero, x, y, Math.Max(width, 320), Math.Max(height, 240), 0x0004 | 0x0010);   // 不改层级 | 不激活
+                if (!IsWindowVisible(hwnd)) ShowWindow(hwnd, 4);   // 显示但不抢焦点
+            }
+            catch { }
+        }
+
+        public static void Unfloat(IntPtr hwnd)
+        {
+            if (hwnd == IntPtr.Zero || !IsWindow(hwnd)) return;
+            try
+            {
+                SetWindowLongPtr(hwnd, -8, IntPtr.Zero);
+                ShowWindow(hwnd, 5);
+                SetWindowPos(hwnd, IntPtr.Zero, 90, 70, 1400, 950, 0x0004 | 0x0020);
+            }
+            catch { }
+        }
+
+        public static void HideWindow(IntPtr hwnd)
+        {
+            if (hwnd != IntPtr.Zero && IsWindow(hwnd)) ShowWindow(hwnd, 0);
+        }
+
         // 把一个真实应用的窗口放进 KMS 自己的窗口里：去掉它的标题栏和边框，让它成为 KMS 里那块区域的子窗口。
-        // 返回它原来的窗口样式，放回桌面时要还原。
         public static IntPtr Embed(IntPtr hwnd, IntPtr host, int width, int height)
         {
             var old = GetWindowLongPtr(hwnd, GWL_STYLE);

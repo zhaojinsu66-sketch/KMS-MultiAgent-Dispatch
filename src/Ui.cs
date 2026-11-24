@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -22,6 +23,29 @@ namespace AC
 {
     public static class Program
     {
+        static Mutex _instanceMutex;
+
+        // 已经有一个 KMS 在跑：把它的窗口叫到前面，然后自己退出
+        [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
+        [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
+        static void ActivateExisting()
+        {
+            try
+            {
+                var me = Process.GetCurrentProcess();
+                foreach (var p in Process.GetProcessesByName(me.ProcessName))
+                {
+                    if (p.Id == me.Id) continue;
+                    var h = p.MainWindowHandle;
+                    if (h == IntPtr.Zero) continue;
+                    ShowWindow(h, 9);
+                    SetForegroundWindow(h);
+                    break;
+                }
+            }
+            catch { }
+        }
+
         // 有些代理软件会同时设置 NO_PROXY 和 no_proxy（只差大小写）。
         // Windows 不介意，但 .NET 的 ProcessStartInfo 环境字典是大小写不敏感的，
         // 一碰 psi.Environment 就抛“已添加项”，于是开应用、跑命令行全部失败。
@@ -60,13 +84,20 @@ namespace AC
         {
             SanitizeEnv();
             string mode = args.Length > 0 ? args[0] : "";
+            // 只允许开一个 KMS：开两个会互相覆盖 config.json
+            if (mode != "--selftest")
+            {
+                bool created;
+                _instanceMutex = new Mutex(true, @"Local\KMS-AgentCommander", out created);
+                if (!created) { ActivateExisting(); return 0; }
+            }
             var app = new Application();
             app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
             app.DispatcherUnhandledException += (s, e) =>
             {
                 Store.LogError("未处理的错误", e.Exception);
                 e.Handled = true;
-                if (mode == "") MessageBox.Show("出错了：" + e.Exception.Message, "KMS", MessageBoxButton.OK, MessageBoxImage.Warning);
+                if (mode == "") MessageBox.Show("出错了：" + e.Exception.Message, "KMS多控", MessageBoxButton.OK, MessageBoxImage.Warning);
             };
 
             if (mode == "--selftest")
@@ -220,7 +251,16 @@ namespace AC
 
             acc.OutputAppended += OnOutput;
             Win.Loaded += (s, e) => _box.ScrollToEnd();
-            Win.Closing += (s, e) => { if (!Closing) { e.Cancel = true; Win.Hide(); } };
+            Win.Closing += (s, e) =>
+            {
+                if (!Closing)
+                {
+                    e.Cancel = true;
+                    // 收进托盘时，把贴靠着的应用窗口放回桌面：它是独立的应用，用户要接着用的
+                    try { UnfloatAll(); } catch { }
+                    Win.Hide();
+                }
+            };
             Win.Closed += (s, e) => acc.OutputAppended -= OnOutput;
         }
 
@@ -504,6 +544,13 @@ namespace AC
             RefreshCli();
             SetRunning(false);
             RefreshFooter();
+            // 贴靠窗口跟着 KMS 走
+            _floatTimer = new DispatcherTimer(); _floatTimer.Interval = TimeSpan.FromMilliseconds(400);
+            _floatTimer.Tick += (s, e) => KeepFloat();
+            _floatTimer.Start();
+            Win.LocationChanged += (s, e) => KeepFloat();
+            Win.SizeChanged += (s, e) => KeepFloat();
+            Win.StateChanged += (s, e) => KeepFloat();
             // 现在只有“账号调度”：打开程序就停在这一页，还没选窗口时给一句提示
             ShowPage(PageApps);
             ShowAppsEmptyHint();
@@ -597,8 +644,9 @@ namespace AC
         {
             var w = PageApps.DataContext as AppWindow;
             if (w == null) { Warn("请先在左侧选中一个窗口。"); return; }
-            if (w.IsVm) { Warn("虚拟机里是一整套独立的 Windows。\n直接在虚拟机的画面里打开 Claude 或 Codex，像在一台新电脑上那样登录就行，不需要 KMS 帮忙。"); return; }
-            if (string.IsNullOrEmpty(w.DataDir)) { Warn("这是你平时用的原窗口，它照常登录就行，不需要 KMS 帮忙。\n要登录别的账号，请在左侧选一个新开的窗口（比如“" + (w.Kind == "codex" ? "Codex" : "Claude") + " 窗口 2”）。"); return; }
+            if (w.IsVm) { Warn("虚拟机里是一整套独立的 Windows。\n直接在虚拟机的画面里打开 Claude 或 Codex，像在一台新电脑上那样登录就行，不需要 KMS多控帮忙。"); return; }
+            if (string.IsNullOrEmpty(w.DataDir)) { Warn("这是你平时用的原窗口，它照常登录就行，不需要 KMS多控帮忙。\n要登录别的账号，请在左侧选一个新开的窗口（比如“" + (w.Kind == "codex" ? "Codex" : "Claude") + " 窗口 2”）。"); return; }
+            Containers.ArmStrayWatch(w, 15 * 60);   // 这 15 分钟里，外部浏览器打开登录页会被改到它自己的浏览器
             var m = new ContextMenu();
             var how = new MenuItem(); how.Header = "怎么登录（先看这个）";
             how.Click += (s, e) => LoginHelp(w);
@@ -633,7 +681,7 @@ namespace AC
             {
                 Warn("给“" + w.Label + "”登录账号：\n\n"
                     + "1. 在这个窗口里照常点登录。\n"
-                    + "2. KMS 会自动弹出一个它专用的真空浏览器（访客模式，里面没有任何已登录的账号），在那里面登录你要给这个窗口用的账号。\n"
+                    + "2. KMS多控会自动弹出一个它专用的真空浏览器（访客模式，里面没有任何已登录的账号），在那里面登录你要给这个窗口用的账号。\n"
                     + "3. 登录完，结果会自己回到这个窗口。\n\n"
                     + "你平时的浏览器和原窗口不受影响。");
                 return;
@@ -642,13 +690,13 @@ namespace AC
             Warn("给“" + w.Label + "”登录账号：\n\n"
                 + "用 Google 登录：\n"
                 + "1. 在这个窗口里点“Continue with Google”。\n"
-                + "2. KMS 会自动弹出一个它专用的真空浏览器（访客模式，里面没有任何已登录的账号）。在那里面登录你要给这个窗口用的 Google 账号。\n"
-                + "3. 登录完，浏览器会问“要打开 Claude 吗”，点“打开”。KMS 会把结果交给这个窗口，而不是原窗口。\n\n"
+                + "2. KMS多控会自动弹出一个它专用的真空浏览器（访客模式，里面没有任何已登录的账号）。在那里面登录你要给这个窗口用的 Google 账号。\n"
+                + "3. 登录完，浏览器会问“要打开 Claude 吗”，点“打开”。KMS多控会把结果交给这个窗口，而不是原窗口。\n\n"
                 + "用邮箱登录：\n"
                 + "1. 在这个窗口里输入邮箱，点“Continue with email”。\n"
                 + "2. 点上面“登录”菜单里的“打开这个窗口专用的真空浏览器”，在里面打开邮箱，点邮件里的登录链接。\n"
                 + "   或者：在邮件里右键复制登录链接，再点“把剪贴板里的登录链接交给这个窗口”。\n\n"
-                + "你平时的浏览器和原窗口不受影响。接下来 15 分钟内 KMS 会留意这个窗口的登录结果。\n\n"
+                + "你平时的浏览器和原窗口不受影响。接下来 15 分钟内 KMS多控会留意这个窗口的登录结果。\n\n"
                 + "点“确定”后，这个窗口专用的浏览器会直接开在窗口里。");
             OpenBrowserHere(w, null);
         }
@@ -679,16 +727,16 @@ namespace AC
             if (w == null) { Warn("请先在左侧选中要登录的那个窗口。"); return; }
             if (w.Kind != "claude") { Warn("登录向导只用于 Claude 桌面版。Codex 窗口直接在它自己的窗口里登录就行。"); return; }
             if (string.IsNullOrEmpty(w.DataDir)) { Warn("这是你平时用的原窗口，它本来就能正常登录，不需要向导。\n请在左侧选一个新开的窗口（比如“Claude 窗口 2”）。"); return; }
-            const string cap = "KMS 登录向导";
+            const string cap = "KMS多控登录向导";
             if (!resume)
             {
                 if (SlotSwap.ParkedDir() != null) { resume = true; }
                 else if (MessageBox.Show(Win,
                         "这个向导会让“" + w.Label + "”登录一个新的 Claude 账号。步骤：\n\n"
                         + "1. 你先把所有 Claude 窗口关掉（原窗口和新开的都要关）。\n"
-                        + "2. KMS 把你现在这份 Claude 数据改个名放到一边（不删除），然后打开一个空白状态的 Claude。\n"
+                        + "2. KMS多控把你现在这份 Claude 数据改个名放到一边（不删除），然后打开一个空白状态的 Claude。\n"
                         + "3. 你在里面用 Google 登录新账号，登录成功后关掉它。\n"
-                        + "4. KMS 把新账号的数据交给“" + w.Label + "”，再把你原来那份数据原样放回去。\n\n"
+                        + "4. KMS多控把新账号的数据交给“" + w.Label + "”，再把你原来那份数据原样放回去。\n\n"
                         + "全程只改文件夹的名字，不删除任何东西。现在开始吗？", cap, MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
             }
             if (!resume)
@@ -745,9 +793,9 @@ namespace AC
             var w = _apps.FirstOrDefault(x => x.Id == _cfg.WizardTarget);
             var r = MessageBox.Show(Win,
                 "上次的登录向导没有走完：你原来的 Claude 数据还放在一边（没有丢）。\n\n"
-                + "点“是”：继续完成向导。\n点“否”：放弃，把原来的数据恢复原样。", "KMS 登录向导", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                + "点“是”：继续完成向导。\n点“否”：放弃，把原来的数据恢复原样。", "KMS多控登录向导", MessageBoxButton.YesNo, MessageBoxImage.Warning);
             if (r == MessageBoxResult.Yes && w != null) { AppList.SelectedItem = null; PageApps.DataContext = w; LoginWizard(w, true); return; }
-            if (SlotSwap.ClaudeProcessCount() > 0) { Warn("要恢复原来的数据，需要先把所有 Claude 窗口关掉（托盘图标也要退出）。关掉后重新打开 KMS 即可。"); return; }
+            if (SlotSwap.ClaudeProcessCount() > 0) { Warn("要恢复原来的数据，需要先把所有 Claude 窗口关掉（托盘图标也要退出）。关掉后重新打开 KMS多控即可。"); return; }
             var back = SlotSwap.Restore();
             _cfg.WizardTarget = ""; SaveAll();
             Warn(back ?? "原来的数据已经恢复，可以照常打开 Claude。");
@@ -774,6 +822,11 @@ namespace AC
         int _embedTries;
         int _embedRetries;                       // 应用自己跑回桌面时，自动再放进来几次
         IntPtr _embedSeen = IntPtr.Zero;
+        // 贴靠：应用窗口保持独立窗口，只把它摆到右边那一格的屏幕位置上，跟着 KMS 动
+        DispatcherTimer _floatTimer;
+        IntPtr _floatHwnd = IntPtr.Zero;
+        AppWindow _floatWin;
+        readonly HashSet<IntPtr> _parked = new HashSet<IntPtr>();   // 被收起来的贴靠窗口
 
         Slot SlotFor(AppWindow w)
         {
@@ -914,22 +967,12 @@ namespace AC
         // 点左侧的一个应用窗口：右边就变成它。没开就先打开，开着就直接放进来。
         void ShowApp(AppWindow w)
         {
+            if (_floatWin != null && _floatWin != w) HideFloat();
             PageApps.DataContext = w;
             ShowPage(PageApps);
             var topBar = Win.FindName("AppTopBar") as FrameworkElement;
             if (topBar != null) topBar.Visibility = Visibility.Visible;
             var s = SlotFor(w);
-            // 应用窗口一律不嵌进来：直接开成桌面上的正常窗口。
-            // 嵌进来（SetParent）会让键盘输入、登录对话框、内置浏览器各种失灵，得不偿失。
-            if (!w.IsVm)
-            {
-                SetHostVisible(false);
-                var openErr = RealApps.Open(w, true);
-                if (openErr != null) { F<TextBlock>("AppHostTitle").Text = openErr; return; }
-                F<TextBlock>("AppHostTitle").Text = w.Label + " 已经打开";
-                F<TextBlock>("AppHostText").Text = "它是桌面上的一个独立窗口（不嵌进来：这样打字、对话框、登录浏览器都跟平时一模一样）。\n登录、换账号用顶部「登录 ▾」，窗口不在最前面时点它一下就会切过去。";
-                return;
-            }
             Arrange(s);
             F<TextBlock>("AppHostText").Text = w.IsVm ? VmHostNote : AppHostNote;
             if (IsEmbedded(s)) { SetHostVisible(true); s.Panel.FocusChild(); return; }
@@ -985,6 +1028,8 @@ namespace AC
                 return;
             }
             _embedTimer.Stop();
+            // 应用窗口用“贴靠”：它还是正常的独立窗口（打字、对话框、浏览器都正常），只是被摆到格子上
+            if (!w.IsVm) { PlaceFloat(w, h); return; }
             var s = SlotFor(w);
             SetHostVisible(true);
             s.Panel.Visible = true;   // 先显示出来、有了大小，才能把窗口放进去
@@ -1012,9 +1057,106 @@ namespace AC
             catch (Exception ex) { Store.LogError("嵌入应用窗口", ex); SetHostVisible(false); F<TextBlock>("AppHostTitle").Text = "没能把 " + w.Label + " 放进来。"; }
         }
 
+        // ---------- 贴靠：把应用窗口摆在格子的屏幕位置上 ----------
+
+        IntPtr KmsHandle()
+        {
+            try { return new System.Windows.Interop.WindowInteropHelper(Win).Handle; } catch { return IntPtr.Zero; }
+        }
+
+        void PlaceFloat(AppWindow w, IntPtr h)
+        {
+            HideFloat();
+            _floatWin = w; _floatHwnd = h;
+            var s = SlotFor(w);
+            s.Hwnd = h;
+            SetHostVisible(false);
+            F<TextBlock>("AppHostTitle").Text = "";
+            KeepFloat();
+        }
+
+        void HideFloat()
+        {
+            if (_floatHwnd != IntPtr.Zero)
+            {
+                RealApps.HideWindow(_floatHwnd);
+                _parked.Add(_floatHwnd);          // 记着它，退出时好放回桌面
+                Slot s;
+                if (_floatWin != null && _slots.TryGetValue(_floatWin.Id, out s) && s.Hwnd == _floatHwnd) s.Hwnd = IntPtr.Zero;
+            }
+            _floatHwnd = IntPtr.Zero;
+            _floatWin = null;
+        }
+
+        void KeepFloat()
+        {
+            if (_floatHwnd == IntPtr.Zero) return;
+            if (!RealApps.IsWindow(_floatHwnd))
+            {
+                var dead = _floatWin;
+                _floatHwnd = IntPtr.Zero; _floatWin = null;
+                Slot s2;
+                if (dead != null && _slots.TryGetValue(dead.Id, out s2)) s2.Hwnd = IntPtr.Zero;
+                if (dead != null && _embedRetries < 6)
+                {
+                    _embedRetries++;
+                    _embedTarget = dead; _embedSeen = IntPtr.Zero; _embedTries = 0;
+                    if (_embedTimer != null) _embedTimer.Start();
+                }
+                return;
+            }
+            // KMS 自己收起来了 / 最小化了：把窗口放回桌面，别跟着藏起来（用户还要接着用那个应用）
+            if (!Win.IsVisible || Win.WindowState == WindowState.Minimized)
+            {
+                UnfloatAll();
+                return;
+            }
+            bool show = PageApps.Visibility == Visibility.Visible
+                        && PageApps.DataContext == _floatWin
+                        && _floatWin != null;
+            if (!show) { RealApps.HideWindow(_floatHwnd); return; }
+            try
+            {
+                var area = F<Grid>("AppHostArea");
+                var p0 = area.PointToScreen(new Point(0, 0));
+                var p1 = area.PointToScreen(new Point(area.ActualWidth, area.ActualHeight));
+                RealApps.Float(_floatHwnd, KmsHandle(), (int)p0.X, (int)p0.Y, (int)(p1.X - p0.X), (int)(p1.Y - p0.Y));
+            }
+            catch { }
+        }
+
+        // 把当前贴靠的窗口（以及之前被收起来的）放回桌面，变回普通窗口
+        void UnfloatAll()
+        {
+            if (_floatHwnd != IntPtr.Zero)
+            {
+                try { RealApps.Unfloat(_floatHwnd); } catch { }
+                Slot s;
+                if (_floatWin != null && _slots.TryGetValue(_floatWin.Id, out s) && s.Hwnd == _floatHwnd) s.Hwnd = IntPtr.Zero;
+                _floatHwnd = IntPtr.Zero; _floatWin = null;
+            }
+            foreach (var h in _parked.ToList())
+            {
+                try { RealApps.Unfloat(h); } catch { }
+                try { RealApps.Forget(h); } catch { }
+            }
+            _parked.Clear();
+        }
+
         // 把一个窗口放回桌面，变回普通的独立窗口
         void PopApp(AppWindow w, int index)
         {
+            if (_floatWin == w && _floatHwnd != IntPtr.Zero)
+            {
+                RealApps.Unfloat(_floatHwnd);
+                _floatHwnd = IntPtr.Zero; _floatWin = null;
+                if (PageApps.DataContext == w)
+                {
+                    SetHostVisible(false);
+                    F<TextBlock>("AppHostTitle").Text = w.Label + " 已放回桌面";
+                }
+                return;
+            }
             Slot s;
             if (!_slots.TryGetValue(w.Id, out s) || !IsEmbedded(s)) return;
             RealApps.Release(s.Hwnd, s.OldStyle, 90 + index * 48, 70 + index * 48, 1500, 1000);
@@ -1042,6 +1184,7 @@ namespace AC
             {
                 Slot s;
                 if (!_slots.TryGetValue(w.Id, out s) || s.Hwnd == IntPtr.Zero) continue;
+                if (w == _floatWin || s.Hwnd == _floatHwnd) continue;   // 贴靠着的那份由 KeepFloat 管
                 if (!IsEmbedded(s))
                 {
                     // 窗口没了，或者被应用自己从这一格里弄出去了：
@@ -1097,7 +1240,7 @@ namespace AC
             if (w.IsVm)
             {
                 // 虚拟机条目只是列表里的一项：移除它不动虚拟机本身
-                if (MessageBox.Show(Win, "把“" + w.Label + "”从列表里移除吗？\n虚拟机本身不会被删除，也不会被关机；以后可以用“＋ 添加”再放回来。", "KMS",
+                if (MessageBox.Show(Win, "把“" + w.Label + "”从列表里移除吗？\n虚拟机本身不会被删除，也不会被关机；以后可以用“＋ 添加”再放回来。", "KMS多控",
                         MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
                 PopApp(w, 0);
                 _apps.Remove(w);
@@ -1106,9 +1249,9 @@ namespace AC
                 NavTask.IsChecked = true;
                 return;
             }
-            if (string.IsNullOrEmpty(w.DataDir)) { Warn("这是应用原本的那一份，不是 KMS 创建的，不能在这里删除。"); return; }
+            if (string.IsNullOrEmpty(w.DataDir)) { Warn("这是应用原本的那一份，不是 KMS多控创建的，不能在这里删除。"); return; }
             if (RealApps.Find(w) != null) { Warn("这个窗口还开着。请先把它关掉，再删除。"); return; }
-            if (MessageBox.Show(Win, "确定删除“" + w.Label + "”吗？\n它的数据文件夹会一并删除，里面的登录和聊天记录都会没有。", "KMS",
+            if (MessageBox.Show(Win, "确定删除“" + w.Label + "”吗？\n它的数据文件夹会一并删除，里面的登录和聊天记录都会没有。", "KMS多控",
                     MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
             _apps.Remove(w);
             PageApps.DataContext = null;
@@ -1134,7 +1277,7 @@ namespace AC
             try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); } catch { }
         }
 
-        void Warn(string text) { MessageBox.Show(Win, text, "KMS", MessageBoxButton.OK, MessageBoxImage.Information); }
+        void Warn(string text) { MessageBox.Show(Win, text, "KMS多控", MessageBoxButton.OK, MessageBoxImage.Information); }
 
         static string Span(TimeSpan t)
         {
@@ -1420,7 +1563,7 @@ namespace AC
             if (!Directory.Exists(_projectDir) && !Browse()) return false;
             if (_cfg.Permission == "full" &&
                 MessageBox.Show(Win, "“完全自动”会让 Agent 不经确认就在你的电脑上执行命令、修改文件。\n只建议用在有备份的项目上。确定继续吗？",
-                    "KMS", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return false;
+                    "KMS多控", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return false;
             return true;
         }
 
@@ -1605,7 +1748,7 @@ namespace AC
             if (w == null) return;
             if (string.IsNullOrEmpty(w.DataDir))
             {
-                Warn("这一条是你平时用的原窗口，KMS 不动它的登录。\n要换账号，直接在应用自己的头像菜单里退出登录即可。");
+                Warn("这一条是你平时用的原窗口，KMS多控不动它的登录。\n要换账号，直接在应用自己的头像菜单里退出登录即可。");
                 return;
             }
             if (_running) { Warn("有任务正在运行，等它结束后再换账号。"); return; }
@@ -1614,7 +1757,7 @@ namespace AC
                     + "2. 现在这份登录数据改个名字放到一边（不删除，之后还能找回）\n"
                     + "3. 重新打开一个没登录的窗口，用你要用的账号登录\n\n"
                     + "要继续吗？";
-            if (MessageBox.Show(Win, ask, "KMS", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+            if (MessageBox.Show(Win, ask, "KMS多控", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
 
             var s = SlotFor(w);
             IntPtr hwnd = s.Hwnd;
@@ -1720,7 +1863,7 @@ namespace AC
         string Prompt(string hint, string initial)
         {
             var dlg = new Window();
-            dlg.Title = "KMS";
+            dlg.Title = "KMS多控";
             dlg.Owner = Win;
             dlg.WindowStartupLocation = WindowStartupLocation.CenterOwner;
             dlg.ResizeMode = ResizeMode.NoResize;
@@ -1886,7 +2029,7 @@ namespace AC
             var a = Selected(); if (a == null) return;
             if (_running || _busy) { Warn("有任务正在运行，等它结束后再退出登录。"); return; }
             string where = a.UseDefaultLogin ? "\n注意：这个账号沿用的是这台电脑上 " + a.AgentName + " 原有的登录，退出后别处用它的地方也要重新登录。" : "";
-            if (MessageBox.Show(Win, "确定让“" + a.Display + "”退出登录吗？" + where, "KMS", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+            if (MessageBox.Show(Win, "确定让“" + a.Display + "”退出登录吗？" + where, "KMS多控", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
             var err = await Cli.Logout(_cfg, a);
             if (err != null) { Warn(err); return; }
             a.LastTest = "已退出登录。";
@@ -1933,7 +2076,7 @@ namespace AC
             bool ownDir = !a.UseDefaultLogin && !string.IsNullOrEmpty(a.ProfileDir)
                           && a.ProfileDir.StartsWith(Path.Combine(Store.DataDir, "profiles"), StringComparison.OrdinalIgnoreCase);
             var msg = "确定删除“" + a.Display + "”吗？" + (ownDir ? "\n它独立的登录目录也会一并删除，之后要再用需要重新登录。" : "\n这台电脑上该工具原有的登录不受影响。");
-            if (MessageBox.Show(Win, msg, "KMS", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+            if (MessageBox.Show(Win, msg, "KMS多控", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
             AgentWindow w;
             if (_wins.TryGetValue(a.Id, out w)) { w.Closing = true; w.Win.Close(); _wins.Remove(a.Id); }
             _awaitLogin.Remove(a);
